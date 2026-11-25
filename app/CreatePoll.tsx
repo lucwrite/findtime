@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import SlotGrid from "@/app/SlotGrid";
 import { dateKey, localZone, minutesLabel, parseDateKey } from "@/lib/time";
@@ -32,7 +32,61 @@ function RangePicker({ value, onChange, onRemove }: { value: Range; onChange: (r
 }
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-export default function CreatePoll() {
+// An existing poll to start from ("Duplicate"). Responses are never copied.
+export type Template = {
+  title: string;
+  organizer: string;
+  location: string;
+  description: string;
+  slotMin: number;
+  durationMin: number;
+  slots: string[];
+};
+
+// Turn a poll's slots back into days + hour ranges in this browser's time zone.
+function fromSlots(slots: string[], slotMin: number, today: Date) {
+  const byDay = new Map<string, number[]>();
+  for (const iso of slots) {
+    const d = new Date(iso);
+    const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const k = dateKey(d);
+    if (day < today) {
+      byDay.set("past:" + k, []);
+      continue;
+    }
+    if (!byDay.has(k)) byDay.set(k, []);
+    byDay.get(k)!.push(d.getHours() * 60 + d.getMinutes());
+  }
+  const ranges: Record<string, Range[]> = {};
+  for (const [k, mins] of byDay) {
+    if (k.startsWith("past:")) continue;
+    mins.sort((a, b) => a - b);
+    const out: Range[] = [];
+    for (const m of mins) {
+      const last = out[out.length - 1];
+      if (last && m <= last.end) last.end = Math.max(last.end, m + slotMin);
+      else out.push({ start: m, end: m + slotMin });
+    }
+    // The pickers work in half hours; round outward, extra slots get removed below.
+    ranges[k] = out.map((r) => ({ start: Math.floor(r.start / 30) * 30, end: Math.min(1440, Math.ceil(r.end / 30) * 30) }));
+  }
+  // The most common single block becomes the default hours (rounded to whole hours).
+  const tally = new Map<string, number>();
+  for (const r of Object.values(ranges)) {
+    if (r.length !== 1) continue;
+    const key = `${Math.floor(r[0].start / 60) * 60}-${Math.min(1440, Math.ceil(r[0].end / 60) * 60)}`;
+    tally.set(key, (tally.get(key) ?? 0) + 1);
+  }
+  const top = [...tally].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "540-1020";
+  const [startMin, endMin] = top.split("-").map(Number);
+  const custom: Record<string, Range[]> = {};
+  for (const [k, r] of Object.entries(ranges)) {
+    if (!(r.length === 1 && r[0].start === startMin && r[0].end === endMin)) custom[k] = r;
+  }
+  return { days: Object.keys(ranges), startMin, endMin, custom, past: [...byDay.keys()].filter((k) => k.startsWith("past:")).length };
+}
+
+export default function CreatePoll({ template }: { template?: Template }) {
   const router = useRouter();
   const today = useMemo(() => {
     const d = new Date();
@@ -56,6 +110,31 @@ export default function CreatePoll() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const dragDay = useMemo(() => ({ on: false, adding: true }), []);
+  const [copyNote, setCopyNote] = useState<{ title: string; past: number } | null>(null);
+  // Slots the copied poll actually offered; anything else in the rebuilt grid starts removed.
+  const keepOnly = useRef<Set<string> | null>(null);
+
+  // Prefill from a duplicated poll. Runs after mount so dates use this browser's time zone.
+  useEffect(() => {
+    if (!template) return;
+    const t = fromSlots(template.slots, template.slotMin, today);
+    setTitle(template.title);
+    setOrganizer(template.organizer);
+    setLocation(template.location);
+    setDescription(template.description);
+    setSlotMin(template.slotMin);
+    setDurationMin(template.durationMin);
+    setStartMin(t.startMin);
+    setEndMin(t.endMin);
+    setCustom(t.custom);
+    setDays(t.days);
+    if (t.days.length) {
+      const first = parseDateKey([...t.days].sort()[0]);
+      setMonth(new Date(first.getFullYear(), first.getMonth(), 1));
+    }
+    keepOnly.current = new Set(template.slots);
+    setCopyNote({ title: template.title, past: t.past });
+  }, [template, today]);
 
   const allSlots = useMemo(() => {
     const out: string[] = [];
@@ -82,6 +161,12 @@ export default function CreatePoll() {
       else n[k] = r;
       return n;
     });
+  useEffect(() => {
+    const keep = keepOnly.current;
+    if (!keep || allSlots.length === 0) return;
+    keepOnly.current = null;
+    setRemoved(new Set(allSlots.filter((s) => !keep.has(s))));
+  }, [allSlots]);
   const slots = allSlots.filter((s) => !removed.has(s));
 
   const durations = [15, 30, 45, 60, 90, 120, 180].filter((d) => d % slotMin === 0 && d >= slotMin);
@@ -142,7 +227,18 @@ export default function CreatePoll() {
         <span>Findtime</span>
         <a className="top-links" href="/polls">My polls →</a>
       </header>
-      <h1>Find a time that works for everyone</h1>
+      {copyNote ? (
+        <>
+          <h1>Duplicate a poll</h1>
+          <p className="copy-note">
+            Starting from <strong>&ldquo;{copyNote.title}&rdquo;</strong>. Change anything you like, then create the new poll.
+            The original poll and its answers stay as they are; answers aren&rsquo;t copied.
+            {copyNote.past > 0 && ` ${copyNote.past} day${copyNote.past === 1 ? " was" : "s were"} in the past and left out.`}
+          </p>
+        </>
+      ) : (
+        <h1>Find a time that works for everyone</h1>
+      )}
       <p className="lede">
         Pick some days and hours, share the link, and everyone paints in when they&rsquo;re free. No accounts needed.
       </p>

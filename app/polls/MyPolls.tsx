@@ -116,6 +116,7 @@ export default function MyPolls({ rows: initial }: { rows: Row[] }) {
                 <button type="button" className="secondary" onClick={() => copy(r)}>
                   {copied === r.id ? "Copied!" : "Copy share link"}
                 </button>
+                <a className="secondary" href={`/?from=${r.id}`}>Duplicate</a>
                 <button type="button" className="link danger" onClick={() => remove(r)}>Delete</button>
               </div>
             </li>

@@ -260,3 +260,12 @@ main > .big { width: 100%; }
 .empty-state { text-align: center; padding: 36px 20px; }
 .empty-state h2 { justify-content: center; }
 .brand .top-links { margin-left: auto; font-size: 14px; font-weight: 600; color: var(--accent); }
+
+.copy-note {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 0 0 20px;
+  line-height: 1.45;
+}

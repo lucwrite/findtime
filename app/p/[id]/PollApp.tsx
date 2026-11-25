@@ -366,6 +366,7 @@ export default function PollApp({ id }: { id: string }) {
                 Clear chosen time
               </button>
             )}
+            <a className="link" href={`/?from=${poll.id}`}>Duplicate &amp; edit</a>
             <button type="button" className="link danger push-right" onClick={deletePollNow}>
               Delete poll
             </button>
