@@ -166,7 +166,7 @@ export default function PollApp({ id }: { id: string }) {
 
   async function save() {
     setMsg(null);
-    if (!name.trim()) return setMsg({ kind: "err", text: "Add your first name first." });
+    if (!name.trim()) return setMsg({ kind: "err", text: "Please add your first name." });
     setSaving(true);
     const targetId = editingId ?? mine?.responseId;
     const res = await fetch(`/api/polls/${id}/responses`, {
