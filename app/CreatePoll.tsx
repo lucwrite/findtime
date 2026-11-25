@@ -6,6 +6,30 @@ import SlotGrid from "@/app/SlotGrid";
 import { dateKey, localZone, minutesLabel, parseDateKey } from "@/lib/time";
 
 const HOURS = Array.from({ length: 25 }, (_, i) => i * 60);
+const HALF_HOURS = Array.from({ length: 49 }, (_, i) => i * 30);
+type Range = { start: number; end: number };
+
+const endLabel = (m: number) => (m === 1440 ? "midnight" : minutesLabel(m));
+
+function RangePicker({ value, onChange, onRemove }: { value: Range; onChange: (r: Range) => void; onRemove?: () => void }) {
+  return (
+    <span className="range">
+      <select aria-label="From" value={value.start} onChange={(e) => {
+        const start = Number(e.target.value);
+        onChange({ start, end: Math.max(value.end, start + 30) });
+      }}>
+        {HALF_HOURS.slice(0, 48).map((m) => <option key={m} value={m}>{minutesLabel(m)}</option>)}
+      </select>
+      <span className="dash">–</span>
+      <select aria-label="To" value={value.end} onChange={(e) => onChange({ ...value, end: Number(e.target.value) })}>
+        {HALF_HOURS.slice(1).map((m) => <option key={m} value={m} disabled={m <= value.start}>{endLabel(m)}</option>)}
+      </select>
+      {onRemove && (
+        <button type="button" className="icon-btn x" aria-label="Remove this time block" onClick={onRemove}>×</button>
+      )}
+    </span>
+  );
+}
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default function CreatePoll() {
@@ -24,6 +48,8 @@ export default function CreatePoll() {
   const [startMin, setStartMin] = useState(9 * 60);
   const [endMin, setEndMin] = useState(17 * 60);
   const [slotMin, setSlotMin] = useState(30);
+  // Days with their own hours; days not listed here use the default hours.
+  const [custom, setCustom] = useState<Record<string, Range[]>>({});
   const [durationMin, setDurationMin] = useState(60);
   const [removed, setRemoved] = useState<Set<string>>(new Set());
   const [paint, setPaint] = useState<"remove" | "add">("remove");
@@ -35,13 +61,27 @@ export default function CreatePoll() {
     const out: string[] = [];
     for (const k of [...days].sort()) {
       const base = parseDateKey(k);
-      for (let m = startMin; m + slotMin <= endMin; m += slotMin) {
+      const mins = new Set<number>();
+      for (const r of custom[k] ?? [{ start: startMin, end: endMin }]) {
+        // Snap to the grid so a 9:30 start still works with 1-hour steps.
+        const first = Math.ceil(r.start / slotMin) * slotMin;
+        for (let m = first; m + slotMin <= r.end; m += slotMin) mins.add(m);
+      }
+      for (const m of [...mins].sort((a, b) => a - b)) {
         const d = new Date(base.getFullYear(), base.getMonth(), base.getDate(), Math.floor(m / 60), m % 60);
         out.push(d.toISOString());
       }
     }
     return out;
-  }, [days, startMin, endMin, slotMin]);
+  }, [days, startMin, endMin, slotMin, custom]);
+  const sortedDays = useMemo(() => [...days].sort(), [days]);
+  const setDayRanges = (k: string, r: Range[] | null) =>
+    setCustom((c) => {
+      const n = { ...c };
+      if (r === null) delete n[k];
+      else n[k] = r;
+      return n;
+    });
   const slots = allSlots.filter((s) => !removed.has(s));
 
   const durations = [15, 30, 45, 60, 90, 120, 180].filter((d) => d % slotMin === 0 && d >= slotMin);
@@ -202,7 +242,7 @@ export default function CreatePoll() {
         <h2><span className="step">3</span> Which hours?</h2>
         <div className="three">
           <label className="field">
-            <span>From</span>
+            <span>Default from</span>
             <select value={startMin} onChange={(e) => setStartMin(Number(e.target.value))}>
               {HOURS.slice(0, 24).map((m) => (
                 <option key={m} value={m}>{minutesLabel(m)}</option>
@@ -210,7 +250,7 @@ export default function CreatePoll() {
             </select>
           </label>
           <label className="field">
-            <span>To</span>
+            <span>Default to</span>
             <select value={endMin} onChange={(e) => setEndMin(Number(e.target.value))}>
               {HOURS.slice(1).map((m) => (
                 <option key={m} value={m} disabled={m <= startMin}>
@@ -239,6 +279,57 @@ export default function CreatePoll() {
           </div>
         </div>
         <p className="hint small">Times are in your time zone ({localZone()}). Everyone else sees them converted to theirs.</p>
+
+        {sortedDays.length > 0 && (
+          <div className="per-day">
+            <h3>Hours for each day</h3>
+            <p className="hint small">
+              Every day uses the default hours unless you change it. Add more than one block for split days (e.g. 9–11 and 2–4).
+            </p>
+            <ul>
+              {sortedDays.map((k) => {
+                const own = custom[k];
+                const ranges = own ?? [{ start: startMin, end: endMin }];
+                return (
+                  <li key={k} className={own ? "custom" : ""}>
+                    <span className="pd-day">{parseDateKey(k).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</span>
+                    <span className="pd-ranges">
+                      {ranges.map((r, i) => (
+                        <RangePicker
+                          key={i}
+                          value={r}
+                          onChange={(nr) => setDayRanges(k, ranges.map((x, j) => (j === i ? nr : x)))}
+                          onRemove={ranges.length > 1 ? () => setDayRanges(k, ranges.filter((_, j) => j !== i)) : undefined}
+                        />
+                      ))}
+                    </span>
+                    <span className="pd-actions">
+                      <button
+                        type="button"
+                        className="link"
+                        onClick={() => {
+                          const last = ranges[ranges.length - 1];
+                          const start = Math.min(last.end + 60, 1410);
+                          setDayRanges(k, [...ranges, { start, end: Math.min(start + 120, 1440) }]);
+                        }}
+                      >
+                        + Add time
+                      </button>
+                      {own && (
+                        <button type="button" className="link muted" onClick={() => setDayRanges(k, null)}>
+                          Use default
+                        </button>
+                      )}
+                      <button type="button" className="link muted" onClick={() => toggleDay(k, false)} aria-label="Remove this day">
+                        Remove day
+                      </button>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </section>
 
       {allSlots.length > 0 && (
