@@ -166,7 +166,7 @@ export default function PollApp({ id }: { id: string }) {
 
   async function save() {
     setMsg(null);
-    if (!name.trim()) return setMsg({ kind: "err", text: "Add your name first." });
+    if (!name.trim()) return setMsg({ kind: "err", text: "Add your first name first." });
     setSaving(true);
     const targetId = editingId ?? mine?.responseId;
     const res = await fetch(`/api/polls/${id}/responses`, {
@@ -372,8 +372,8 @@ export default function PollApp({ id }: { id: string }) {
             <>
               <h2>{editingId ? `Editing ${name}'s response` : mine ? "Update your availability" : "Add your availability"}</h2>
               <label className="field">
-                <span>Your name</span>
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="First and last name" maxLength={60} />
+                <span>First name</span>
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Priya" maxLength={30} autoComplete="given-name" />
               </label>
               <div className="paint-bar">
                 <span className="seg-label">Paint:</span>
