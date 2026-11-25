@@ -244,3 +244,19 @@ main > .big { width: 100%; }
 .login-card .big { width: 100%; }
 .retention { margin-top: 6px; }
 .push-right { margin-left: auto; }
+
+/* my polls */
+.list-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.list-head .hint { margin: 0; }
+.seg.filter { margin-bottom: 16px; }
+.poll-list { list-style: none; padding: 0; margin: 0; }
+.poll-list li { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.pl-main { min-width: 0; flex: 1 1 320px; }
+.pl-main .hint { margin: 0; }
+.pl-title { font-family: var(--font-serif), Georgia, serif; font-size: 21px; font-weight: 600; color: var(--ink); text-decoration: none; display: inline-block; margin-bottom: 4px; overflow-wrap: anywhere; }
+.pl-title:hover { color: var(--accent); }
+.pl-final { margin: 2px 0 4px; font-weight: 600; font-size: 14px; }
+.pl-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.empty-state { text-align: center; padding: 36px 20px; }
+.empty-state h2 { justify-content: center; }
+.brand .top-links { margin-left: auto; font-size: 14px; font-weight: 600; color: var(--accent); }

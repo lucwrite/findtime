@@ -5,7 +5,9 @@ import type { StoredPoll, StoredResponse } from "@/lib/types";
 // answering at the same moment never overwrite each other. Without a Blob token
 // (local dev) everything lives in memory.
 const useBlob = () => Boolean(process.env.BLOB_READ_WRITE_TOKEN);
-const mem = new Map<string, string>();
+// Shared across route handlers and pages, which Next bundles separately.
+const g = globalThis as unknown as { __findtimeMem?: Map<string, string> };
+const mem = (g.__findtimeMem ??= new Map<string, string>());
 
 const pollPath = (id: string) => `polls/${id}/poll.json`;
 const respPrefix = (id: string) => `polls/${id}/r/`;
@@ -99,4 +101,34 @@ export async function listPollIds(): Promise<string[]> {
     cursor = page.hasMore ? page.cursor : undefined;
   } while (cursor);
   return ids;
+}
+
+// Every poll with its response count, for the organizer's dashboard.
+// One listing of all blobs gives the counts; then each poll.json is read.
+export async function listAllPolls(): Promise<{ poll: StoredPoll; responses: number }[]> {
+  const paths: string[] = [];
+  if (!useBlob()) paths.push(...mem.keys());
+  else {
+    let cursor: string | undefined;
+    do {
+      const page = await list({ prefix: "polls/", cursor, limit: 1000 });
+      paths.push(...page.blobs.map((b) => b.pathname));
+      cursor = page.hasMore ? page.cursor : undefined;
+    } while (cursor);
+  }
+  const counts = new Map<string, number>();
+  for (const p of paths) {
+    const [, id, kind] = p.split("/");
+    if (!counts.has(id)) counts.set(id, 0);
+    if (kind === "r") counts.set(id, counts.get(id)! + 1);
+  }
+  const rows = await Promise.all(
+    [...counts.keys()].map(async (id) => {
+      const poll = await readPoll(id).catch(() => null);
+      return poll ? { poll, responses: counts.get(id)! } : null;
+    }),
+  );
+  return rows
+    .filter((r): r is { poll: StoredPoll; responses: number } => Boolean(r))
+    .sort((a, b) => b.poll.createdAt.localeCompare(a.poll.createdAt));
 }

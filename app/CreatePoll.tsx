@@ -140,6 +140,7 @@ export default function CreatePoll() {
       <header className="brand">
         <img src="/icon.svg" alt="" width={32} height={32} />
         <span>Findtime</span>
+        <a className="top-links" href="/polls">My polls →</a>
       </header>
       <h1>Find a time that works for everyone</h1>
       <p className="lede">

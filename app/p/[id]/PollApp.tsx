@@ -287,7 +287,7 @@ export default function PollApp({ id }: { id: string }) {
 
   return (
     <main className="wrap wide">
-      <Brand />
+      <Brand admin={isAdmin} />
 
       <section className="poll-head">
         <h1>{poll.title}</h1>
@@ -629,13 +629,14 @@ export default function PollApp({ id }: { id: string }) {
   );
 }
 
-function Brand() {
+function Brand({ admin = false }: { admin?: boolean }) {
   return (
     <header className="brand">
       <a href="/">
         <img src="/icon.svg" alt="" width={32} height={32} />
         <span>Findtime</span>
       </a>
+      {admin && <a className="top-links" href="/polls">← My polls</a>}
     </header>
   );
 }
