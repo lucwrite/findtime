@@ -13,6 +13,7 @@ import {
   meetingOptions,
 } from "@/lib/time";
 import type { Mark, Poll, Response } from "@/lib/types";
+import { KEEP_DAYS, expiresAt } from "@/lib/retention";
 
 type Mine = { responseId: string; editKey: string };
 type PaintMode = Mark | "erase";
@@ -248,6 +249,19 @@ export default function PollApp({ id }: { id: string }) {
     if (res.ok) await load(adminKey);
   }
 
+  async function deletePollNow() {
+    if (!confirm(`Delete "${poll!.title}" and all ${total} response${total === 1 ? "" : "s"}? This can't be undone, and the link will stop working.`)) return;
+    const res = await fetch(`/api/polls/${id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ adminKey }),
+    });
+    if (!res.ok) return alert("Couldn't delete the poll. Try again.");
+    ls.set(`findtime:admin:${id}`, null);
+    ls.set(mineKey(id), null);
+    window.location.href = "/";
+  }
+
   function copy(text: string, what: string) {
     navigator.clipboard?.writeText(text).then(() => {
       setCopied(what);
@@ -288,6 +302,10 @@ export default function PollApp({ id }: { id: string }) {
         </div>
         {poll.description && <p className="desc">{poll.description}</p>}
         <p className="hint small">Times shown in your time zone: {localZone()}</p>
+        <p className="hint small retention">
+          🔒 Only people with this link can see it. Names and answers are deleted automatically on{" "}
+          {expiresAt(poll).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })} ({KEEP_DAYS} days after the last date).
+        </p>
       </section>
 
       {poll.finalSlot && (
@@ -348,6 +366,9 @@ export default function PollApp({ id }: { id: string }) {
                 Clear chosen time
               </button>
             )}
+            <button type="button" className="link danger push-right" onClick={deletePollNow}>
+              Delete poll
+            </button>
           </div>
         </section>
       )}

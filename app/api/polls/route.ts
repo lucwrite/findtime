@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isCreator } from "@/lib/auth";
 import { writePoll } from "@/lib/store";
 import { LIMITS, shortId, str, token, type StoredPoll } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  if (!(await isCreator())) {
+    return NextResponse.json({ error: "Only the site owner can create polls." }, { status: 401 });
+  }
   const b = await req.json().catch(() => null);
   const title = str(b?.title, LIMITS.title);
   const slotMin = Number(b?.slotMin);

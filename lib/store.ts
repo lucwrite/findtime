@@ -31,7 +31,12 @@ async function writeJSON(pathname: string, data: unknown) {
   });
 }
 
-export const readPoll = (id: string) => readJSON<StoredPoll>(pollPath(id));
+// Poll ids are always 10 chars from shortId(); anything else is rejected
+// before it gets near a storage path.
+export const validId = (id: string) => /^[a-z0-9]{6,20}$/.test(id);
+
+export const readPoll = (id: string) =>
+  validId(id) ? readJSON<StoredPoll>(pollPath(id)) : Promise.resolve(null);
 export const writePoll = (p: StoredPoll) => writeJSON(pollPath(p.id), p);
 
 export async function readResponses(id: string): Promise<StoredResponse[]> {
@@ -64,4 +69,34 @@ export async function deleteResponse(pollId: string, rid: string) {
   if (!useBlob()) return void mem.delete(path);
   const page = await list({ prefix: path, limit: 1 });
   if (page.blobs[0]) await del(page.blobs[0].url);
+}
+
+// Remove a poll and every response to it.
+export async function deletePoll(id: string) {
+  if (!validId(id)) return;
+  const prefix = `polls/${id}/`;
+  if (!useBlob()) {
+    for (const k of [...mem.keys()]) if (k.startsWith(prefix)) mem.delete(k);
+    return;
+  }
+  let cursor: string | undefined;
+  do {
+    const page = await list({ prefix, cursor, limit: 1000 });
+    if (page.blobs.length) await del(page.blobs.map((b) => b.url));
+    cursor = page.hasMore ? page.cursor : undefined;
+  } while (cursor);
+}
+
+export async function listPollIds(): Promise<string[]> {
+  if (!useBlob()) {
+    return [...new Set([...mem.keys()].map((k) => k.split("/")[1]))];
+  }
+  const ids: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await list({ prefix: "polls/", mode: "folded", cursor, limit: 1000 });
+    ids.push(...page.folders.map((f) => f.replace(/^polls\//, "").replace(/\/$/, "")));
+    cursor = page.hasMore ? page.cursor : undefined;
+  } while (cursor);
+  return ids;
 }

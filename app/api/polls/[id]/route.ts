@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readPoll, readResponses, writePoll } from "@/lib/store";
+import { deletePoll, readPoll, readResponses, writePoll } from "@/lib/store";
 import { LIMITS, str, type Response } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -36,4 +36,17 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   await writePoll(poll);
   const { adminKey: _a, ...pub } = poll;
   return NextResponse.json({ poll: pub });
+}
+
+// Organizer-only: delete the poll and all responses.
+export async function DELETE(req: NextRequest, { params }: Ctx) {
+  const { id } = await params;
+  const b = await req.json().catch(() => null);
+  const poll = await readPoll(id);
+  if (!poll) return NextResponse.json({ error: "Poll not found" }, { status: 404 });
+  if (!b || b.adminKey !== poll.adminKey) {
+    return NextResponse.json({ error: "Only the organizer can do that." }, { status: 403 });
+  }
+  await deletePoll(id);
+  return NextResponse.json({ ok: true });
 }
